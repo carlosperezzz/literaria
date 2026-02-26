@@ -1,9 +1,7 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect } from 'react'
-import { supabase } from './lib/supabase'
+import { getSupabase } from './lib/supabase'
 
 export default function Home() {
   const [libros, setLibros] = useState([])
@@ -20,6 +18,7 @@ export default function Home() {
 
   async function cargarLibros() {
     setLoading(true)
+    const supabase = getSupabase()
     let query = supabase.from('libros').select('*')
     if (filtro !== 'todos') {
       query = query.eq('estado_animo', filtro)
@@ -97,13 +96,4 @@ export default function Home() {
             <div key={libro.id} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
               <img src={libro.portada_url} alt={libro.titulo} style={{ width: '100%', height: '250px', objectFit: 'cover' }} />
               <div style={{ padding: '12px' }}>
-                <h3 style={{ fontSize: '0.95rem', color: '#2c1810', marginBottom: '4px' }}>{libro.titulo}</h3>
-                <p style={{ fontSize: '0.8rem', color: '#666' }}>{libro.autor}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </main>
-  )
-}
+                <h3 style={{ fontSize: '0.95rem', color: '#2c1810', m
