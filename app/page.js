@@ -3,22 +3,6 @@
 import { useState, useEffect } from 'react'
 import { getSupabase } from './lib/supabase'
 
-async function obtenerPortada(titulo, autor) {
-  try {
-    const query = encodeURIComponent(`${titulo} ${autor}`)
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`)
-    const data = await res.json()
-    if (data.items) {
-      for (const item of data.items) {
-        if (item.volumeInfo.imageLinks?.thumbnail) {
-          return item.volumeInfo.imageLinks.thumbnail.replace('http://', 'https://')
-        }
-      }
-    }
-  } catch (e) {}
-  return null
-}
-
 export default function Home() {
   const [libros, setLibros] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,15 +24,7 @@ export default function Home() {
       query = query.eq('estado_animo', filtro)
     }
     const { data, error } = await query
-    if (!error && data) {
-      const librosConPortada = await Promise.all(
-        data.map(async (libro) => {
-          const portada = await obtenerPortada(libro.titulo, libro.autor)
-          return { ...libro, portada_url: portada || libro.portada_url }
-        })
-      )
-      setLibros(librosConPortada)
-    }
+    if (!error) setLibros(data)
     setLoading(false)
   }
 
