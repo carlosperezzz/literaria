@@ -6,13 +6,15 @@ import { getSupabase } from './lib/supabase'
 async function obtenerPortada(titulo, autor) {
   try {
     const query = encodeURIComponent(`${titulo} ${autor}`)
-const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`)    const data = await res.json()
-    if (data.items && data.items[0].volumeInfo.imageLinks) {
-for (const item of data.items) {
-  if (item.volumeInfo.imageLinks?.thumbnail) {
-    return item.volumeInfo.imageLinks.thumbnail.replace('http://', 'https://')
-  }
-}    }
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`)
+    const data = await res.json()
+    if (data.items) {
+      for (const item of data.items) {
+        if (item.volumeInfo.imageLinks?.thumbnail) {
+          return item.volumeInfo.imageLinks.thumbnail.replace('http://', 'https://')
+        }
+      }
+    }
   } catch (e) {}
   return null
 }
