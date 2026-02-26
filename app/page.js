@@ -33,9 +33,20 @@ export default function Home() {
     const nuevoChat = [...chat, { rol: 'usuario', texto: mensaje }]
     setChat(nuevoChat)
     setMensaje('')
-    setTimeout(() => {
-      setChat(prev => [...prev, { rol: 'mateo', texto: 'Buscando algo perfecto para ti...' }])
-    }, 1000)
+    setChat(prev => [...prev, { rol: 'mateo', texto: 'Pensando...' }])
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje })
+    })
+    const data = await response.json()
+
+    setChat(prev => {
+      const nuevo = [...prev]
+      nuevo[nuevo.length - 1] = { rol: 'mateo', texto: data.respuesta }
+      return nuevo
+    })
   }
 
   const estados = ['todos', 'feliz', 'reflexivo', 'misterio', 'aventura']
@@ -55,7 +66,8 @@ export default function Home() {
               <span style={{
                 background: m.rol === 'usuario' ? '#2c1810' : '#fff',
                 color: m.rol === 'usuario' ? '#fff' : '#2c1810',
-                padding: '8px 14px', borderRadius: '18px', display: 'inline-block'
+                padding: '8px 14px', borderRadius: '18px', display: 'inline-block',
+                maxWidth: '80%', textAlign: 'left'
               }}>
                 {m.texto}
               </span>
