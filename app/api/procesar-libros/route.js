@@ -3,14 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!url || !key) {
-    return Response.json({ error: 'Variables de entorno no encontradas', url: !!url, key: !!key })
-  }
-
-  const supabase = createClient(url, key)
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
 
   const { data: pendientes, error } = await supabase
     .from('libros_pendientes')
@@ -18,13 +14,45 @@ export async function GET() {
     .eq('procesado', false)
     .limit(5)
 
-  if (error) {
-    return Response.json({ error: error.message, code: error.code })
+  if (error) return Response.json({ error: error.message })
+  if (!pendientes || pendientes.length === 0) return Response.json({ mensaje: 'No hay libros pendientes', procesados: 0 })
+
+  let procesados = 0
+
+  for (const libro of pendientes) {
+    try {
+      const query = encodeURIComponent(libro.titulo)
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`)
+      const data = await res.json()
+
+      if (data.items) {
+        const item = data.items[0]
+        const info = item.volumeInfo
+        const portada = info.imageLinks?.thumbnail?.replace('http://', 'https://') || ''
+        const autor = info.authors?.[0] || 'Desconocido'
+        const descripcion = info.description?.slice(0, 500) || ''
+        const genero = info.categories?.[0] || 'Ficcion'
+
+        await supabase.from('libros').insert({
+          titulo: info.title || libro.titulo,
+          autor,
+          genero,
+          descripcion,
+          portada_url: portada,
+          estado_animo: 'reflexivo'
+        })
+
+        await supabase
+          .from('libros_pendientes')
+          .update({ procesado: true })
+          .eq('id', libro.id)
+
+        procesados++
+      }
+    } catch (e) {
+      console.error('Error:', libro.titulo, e)
+    }
   }
 
-  return Response.json({ 
-    mensaje: pendientes?.length > 0 ? `Encontrados ${pendientes.length} libros` : 'No hay libros pendientes',
-    total: pendientes?.length,
-    libros: pendientes?.map(l => l.titulo)
-  })
+  return Response.json({ mensaje: `Procesados ${procesados} libros`, procesados })
 }
