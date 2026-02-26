@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/procesar-libros",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
