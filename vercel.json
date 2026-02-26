@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/procesar-libros",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
