@@ -21,7 +21,6 @@ export async function GET() {
 
   for (const libro of pendientes) {
     try {
-      // Usar Groq para obtener datos del libro
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -44,8 +43,7 @@ export async function GET() {
   "autor": "nombre completo del autor",
   "genero": "género literario",
   "descripcion": "sinopsis de 2-3 frases",
-  "estado_animo": "una de estas opciones: feliz, reflexivo, misterio, aventura",
-  "isbn": "ISBN-13 si lo conoces, si no pon null"
+  "estado_animo": "una de estas opciones: feliz, reflexivo, misterio, aventura"
 }`
             }
           ]
@@ -56,11 +54,22 @@ export async function GET() {
       const texto = groqData.choices[0].message.content
       const info = JSON.parse(texto.replace(/```json|```/g, '').trim())
 
-      // Buscar portada con el ISBN si lo tenemos
+      // Buscar portada en Open Library por título y autor
       let portada = ''
-      if (info.isbn) {
-        portada = `https://covers.openlibrary.org/b/isbn/${info.isbn}-L.jpg`
-      }
+      try {
+        const query = encodeURIComponent(`${info.titulo} ${info.autor}`)
+        const olRes = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=5`)
+        const olData = await olRes.json()
+
+        if (olData.docs) {
+          for (const doc of olData.docs) {
+            if (doc.cover_i) {
+              portada = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+              break
+            }
+          }
+        }
+      } catch (e) {}
 
       await supabase.from('libros').insert({
         titulo: info.titulo || libro.titulo,
