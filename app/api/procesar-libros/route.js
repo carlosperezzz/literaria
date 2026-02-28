@@ -28,24 +28,33 @@ export async function GET() {
 
       if (data.results && data.results.length > 0) {
         const item = data.results[0]
-        const portada = item.artworkUrl100?.replace('100x100', '600x600') || ''
+        const titulo = item.trackName || libro.titulo
         const autor = item.artistName || 'Desconocido'
+        const portada = item.artworkUrl100?.replace('100x100', '600x600') || ''
         const descripcion = item.description?.slice(0, 500) || ''
         const genero = item.primaryGenreName || 'Ficcion'
-        const titulo = item.trackName || libro.titulo
 
-        await supabase.from('libros').insert({
-          titulo,
-          autor,
-          genero,
-          descripcion,
-          portada_url: portada,
-          estado_animo: 'reflexivo'
-        })
+        // Verificar si ya existe
+        const { data: existe } = await supabase
+          .from('libros')
+          .select('id')
+          .ilike('titulo', titulo)
+          .limit(1)
+
+        if (!existe || existe.length === 0) {
+          await supabase.from('libros').insert({
+            titulo,
+            autor,
+            genero,
+            descripcion,
+            portada_url: portada,
+            estado_animo: 'reflexivo'
+          })
+          resultados.push({ titulo, autor, portada: !!portada })
+          procesados++
+        }
 
         await supabase.from('libros_pendientes').update({ procesado: true }).eq('id', libro.id)
-        procesados++
-        resultados.push({ titulo, autor, portada: !!portada })
       }
     } catch (e) {
       console.error('Error:', libro.titulo, e)
