@@ -22,33 +22,59 @@ export async function GET() {
   for (const libro of pendientes) {
     try {
       const query = encodeURIComponent(libro.titulo)
-      const res = await fetch(`https://openlibrary.org/search.json?q=${query}&lang=spa&limit=3`)
-      const data = await res.json()
+      
+      // 1. Buscar en Open Library
+      const olRes = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=3`)
+      const olData = await olRes.json()
+      
+      let titulo = libro.titulo
+      let autor = 'Desconocido'
+      let descripcion = ''
+      let genero = 'Ficcion'
+      let portada = ''
 
-      if (data.docs && data.docs.length > 0) {
-        const doc = data.docs[0]
-        const coverId = doc.cover_i
-        const portada = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : ''
-        const autor = doc.author_name?.[0] || 'Desconocido'
-        const descripcion = doc.first_sentence?.[0] || doc.subject?.[0] || ''
-        const genero = doc.subject?.[0] || 'Ficcion'
-
-        await supabase.from('libros').insert({
-          titulo: doc.title || libro.titulo,
-          autor,
-          genero,
-          descripcion,
-          portada_url: portada,
-          estado_animo: 'reflexivo'
-        })
-
-        await supabase
-          .from('libros_pendientes')
-          .update({ procesado: true })
-          .eq('id', libro.id)
-
-        procesados++
+      if (olData.docs && olData.docs.length > 0) {
+        const doc = olData.docs[0]
+        titulo = doc.title || libro.titulo
+        autor = doc.author_name?.[0] || 'Desconocido'
+        descripcion = doc.first_sentence?.[0] || ''
+        genero = doc.subject?.[0] || 'Ficcion'
+        if (doc.cover_i) {
+          portada = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+        }
       }
+
+      // 2. Si no hay portada, intentar con Google Books
+      if (!portada) {
+        try {
+          const gbRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`)
+          const gbData = await gbRes.json()
+          if (gbData.items?.[0]?.volumeInfo?.imageLinks?.thumbnail) {
+            portada = gbData.items[0].volumeInfo.imageLinks.thumbnail.replace('http://', 'https://')
+            // Si tampoco teníamos descripción, la tomamos de Google Books
+            if (!descripcion && gbData.items[0].volumeInfo.description) {
+              descripcion = gbData.items[0].volumeInfo.description.slice(0, 500)
+            }
+          }
+        } catch (e) {}
+      }
+
+      await supabase.from('libros').insert({
+        titulo,
+        autor,
+        genero,
+        descripcion,
+        portada_url: portada,
+        estado_animo: 'reflexivo'
+      })
+
+      await supabase
+        .from('libros_pendientes')
+        .update({ procesado: true })
+        .eq('id', libro.id)
+
+      procesados++
+
     } catch (e) {
       console.error('Error:', e)
     }
