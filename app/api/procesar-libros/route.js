@@ -17,26 +17,42 @@ export async function GET() {
   if (error) return Response.json({ error: error.message })
   if (!pendientes || pendientes.length === 0) return Response.json({ mensaje: 'No hay libros pendientes', procesados: 0 })
 
-  const libro = pendientes[0]
+  let procesados = 0
 
-  try {
-    const query = encodeURIComponent(libro.titulo)
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`)
-    const data = await res.json()
+  for (const libro of pendientes) {
+    try {
+      const query = encodeURIComponent(libro.titulo)
+      const res = await fetch(`https://openlibrary.org/search.json?q=${query}&lang=spa&limit=3`)
+      const data = await res.json()
 
-    if (!data.items) {
-      return Response.json({ error: 'Google Books no devuelve items', respuesta: data })
+      if (data.docs && data.docs.length > 0) {
+        const doc = data.docs[0]
+        const coverId = doc.cover_i
+        const portada = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : ''
+        const autor = doc.author_name?.[0] || 'Desconocido'
+        const descripcion = doc.first_sentence?.[0] || doc.subject?.[0] || ''
+        const genero = doc.subject?.[0] || 'Ficcion'
+
+        await supabase.from('libros').insert({
+          titulo: doc.title || libro.titulo,
+          autor,
+          genero,
+          descripcion,
+          portada_url: portada,
+          estado_animo: 'reflexivo'
+        })
+
+        await supabase
+          .from('libros_pendientes')
+          .update({ procesado: true })
+          .eq('id', libro.id)
+
+        procesados++
+      }
+    } catch (e) {
+      console.error('Error:', e)
     }
-
-    const info = data.items[0].volumeInfo
-    return Response.json({
-      titulo: info.title,
-      autor: info.authors?.[0],
-      portada: info.imageLinks?.thumbnail,
-      descripcion: info.description?.slice(0, 100)
-    })
-
-  } catch (e) {
-    return Response.json({ error: e.message })
   }
+
+  return Response.json({ mensaje: `Procesados ${procesados} libros`, procesados })
 }
