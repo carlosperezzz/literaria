@@ -21,51 +21,54 @@ export async function GET() {
 
   for (const libro of pendientes) {
     try {
-      const query = encodeURIComponent(libro.titulo)
-      
-      // 1. Buscar en Open Library
-      const olRes = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=3`)
-      const olData = await olRes.json()
-      
-      let titulo = libro.titulo
-      let autor = 'Desconocido'
-      let descripcion = ''
-      let genero = 'Ficcion'
-      let portada = ''
-
-      if (olData.docs && olData.docs.length > 0) {
-        const doc = olData.docs[0]
-        titulo = doc.title || libro.titulo
-        autor = doc.author_name?.[0] || 'Desconocido'
-        descripcion = doc.first_sentence?.[0] || ''
-        genero = doc.subject?.[0] || 'Ficcion'
-        if (doc.cover_i) {
-          portada = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
-        }
-      }
-
-      // 2. Si no hay portada, intentar con Google Books
-      if (!portada) {
-        try {
-          const gbRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`)
-          const gbData = await gbRes.json()
-          if (gbData.items?.[0]?.volumeInfo?.imageLinks?.thumbnail) {
-            portada = gbData.items[0].volumeInfo.imageLinks.thumbnail.replace('http://', 'https://')
-            // Si tampoco teníamos descripción, la tomamos de Google Books
-            if (!descripcion && gbData.items[0].volumeInfo.description) {
-              descripcion = gbData.items[0].volumeInfo.description.slice(0, 500)
+      // Usar Groq para obtener datos del libro
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          max_tokens: 300,
+          messages: [
+            {
+              role: 'system',
+              content: 'Eres un experto en literatura. Responde SIEMPRE en formato JSON válido sin texto adicional.'
+            },
+            {
+              role: 'user',
+              content: `Dame información del libro "${libro.titulo}" en este formato JSON exacto:
+{
+  "titulo": "título exacto del libro",
+  "autor": "nombre completo del autor",
+  "genero": "género literario",
+  "descripcion": "sinopsis de 2-3 frases",
+  "estado_animo": "una de estas opciones: feliz, reflexivo, misterio, aventura",
+  "isbn": "ISBN-13 si lo conoces, si no pon null"
+}`
             }
-          }
-        } catch (e) {}
+          ]
+        })
+      })
+
+      const groqData = await groqRes.json()
+      const texto = groqData.choices[0].message.content
+      const info = JSON.parse(texto.replace(/```json|```/g, '').trim())
+
+      // Buscar portada con el ISBN si lo tenemos
+      let portada = ''
+      if (info.isbn) {
+        portada = `https://covers.openlibrary.org/b/isbn/${info.isbn}-L.jpg`
       }
 
       await supabase.from('libros').insert({
-        titulo,
-        autor,
-        genero,
-        descripcion,
+        titulo: info.titulo || libro.titulo,
+        autor: info.autor || 'Desconocido',
+        genero: info.genero || 'Ficcion',
+        descripcion: info.descripcion || '',
         portada_url: portada,
-        estado_animo: 'reflexivo'
+        estado_animo: info.estado_animo || 'reflexivo'
       })
 
       await supabase
@@ -76,7 +79,7 @@ export async function GET() {
       procesados++
 
     } catch (e) {
-      console.error('Error:', e)
+      console.error('Error procesando:', libro.titulo, e)
     }
   }
 
